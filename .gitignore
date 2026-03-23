@@ -1,0 +1,27 @@
+.env
+venv/
+outputs/
+lora_model/
+qwen2.5-gguf/
+config/
+crawl4ai-app/
+model_training/
+django-app/
+models/
+
+# ======================
+# MEDIA FILES
+# ======================
+*.mp4
+*.jpg
+*.png
+
+# ======================
+# LOGS
+# ======================
+*.log
+
+# ======================
+# SYSTEM FILES
+# ======================
+.DS_Store
