@@ -8,6 +8,7 @@ crawl4ai-app/
 model_training/
 django-app/
 models/
+.vscode/
 
 # ======================
 # MEDIA FILES
