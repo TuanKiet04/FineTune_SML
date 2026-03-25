@@ -1,0 +1,80 @@
+{
+  "metadata": {
+    "optimal_k": 10,
+    "total_articles": 121,
+    "method": "KMeans + Silhouette Score",
+    "reference": "MacQueen (1967); Rousseeuw (1987)"
+  },
+  "persona_config": {
+    "Nhóm độc giả 1": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 0,
+      "topics": []
+    },
+    "Nhóm độc giả 2": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 1,
+      "topics": []
+    },
+    "Nhóm độc giả 3": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 2,
+      "topics": []
+    },
+    "Nhóm độc giả 4": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 3,
+      "topics": []
+    },
+    "Nhóm độc giả 5": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 4,
+      "topics": []
+    },
+    "Nhóm độc giả 6": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 5,
+      "topics": []
+    },
+    "Nhóm độc giả 7": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 6,
+      "topics": []
+    },
+    "Nhóm độc giả 8": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 7,
+      "topics": []
+    },
+    "Nhóm độc giả 9": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 8,
+      "topics": []
+    },
+    "Nhóm độc giả 10": {
+      "icon": "📖",
+      "desc": "Nhóm độc giả tổng hợp",
+      "prompt": "Bạn là trợ lý tin tức. Hãy trả lời ngắn gọn và khách quan.",
+      "cluster_id": 9,
+      "topics": []
+    }
+  }
+}

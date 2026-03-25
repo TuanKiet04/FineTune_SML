@@ -3,22 +3,27 @@ import psycopg2
 import psycopg2.extras
 import requests
 import os
+import numpy as np
 from datetime import datetime
 
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
 st.set_page_config(page_title="NewsPersona", page_icon="📰", layout="wide")
+
 DB_CONFIG = {
     "host":     os.getenv("PG_HOST", "postgres"),
     "port":     int(os.getenv("PG_PORT", 5432)),
     "dbname":   os.getenv("PG_DB",   "optimize"),
-    "user":     os.getenv("PG_USER", "postgres"),
-    "password": os.getenv("PG_PASS", "password"),
+    "user":     os.getenv("PG_USER", "kietcorn"),
+    "password": os.getenv("PG_PASS", "kiietqo9204"),
 }
 
-OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://ollama:11434") + "/api/chat"
-OLLAMA_MODEL = "qwen2:7b"
+OLLAMA_BASE  = os.getenv("OLLAMA_URL", "http://10.4.21.3:11435")
+OLLAMA_URL   = f"{OLLAMA_BASE}/api/chat"
+EMBED_URL    = f"{OLLAMA_BASE}/api/embeddings"
+OLLAMA_MODEL = "qwen3.5:4b"
+EMBED_MODEL  = "nomic-embed-text:latest"
 
 TOPIC_LABELS = {
     "Cong Nghe": "Công Nghệ",
@@ -29,58 +34,35 @@ TOPIC_LABELS = {
     "Kinh Te":   "Kinh Tế",
 }
 
-# ─────────────────────────────────────────────
-# PERSONA CONFIG
-# ─────────────────────────────────────────────
 PERSONA_CONFIG = {
     "Chuyên gia Công nghệ": {
-        "topics": ["Cong Nghe"],
-        "desc": "Phân tích kỹ thuật & xu hướng tương lai",
-        "prompt": (
-            "Bạn là một CTO dày dạn kinh nghiệm. "
-            "Hãy phân tích tin tức dưới góc độ kỹ thuật, giải pháp công nghệ và xu hướng tương lai. "
-            "Trả lời chuyên sâu, dùng thuật ngữ ngành khi cần thiết."
-        ),
+        "topics":       ["Cong Nghe"],
+        "desc":         "Phân tích kỹ thuật & xu hướng tương lai",
+        "prompt":       "Bạn là một CTO dày dạn kinh nghiệm. Phân tích tin tức dưới góc độ kỹ thuật, xu hướng công nghệ và tác động thực tiễn. Trả lời chuyên sâu, súc tích.",
     },
     "Nhà phân tích Kinh tế": {
-        "topics": ["Kinh Te"],
-        "desc": "Chỉ số thị trường, rủi ro & tác động vĩ mô",
-        "prompt": (
-            "Bạn là chuyên gia kinh tế trưởng. "
-            "Hãy tập trung vào các con số, chỉ số thị trường, rủi ro tài chính và tác động vĩ mô của tin tức. "
-            "Trả lời có số liệu cụ thể và nhận định rõ ràng."
-        ),
+        "topics":       ["Kinh Te"],
+        "desc":         "Chỉ số thị trường, rủi ro & tác động vĩ mô",
+        "prompt":       "Bạn là chuyên gia kinh tế trưởng. Tập trung vào số liệu, chỉ số thị trường, rủi ro tài chính và tác động vĩ mô. Trả lời có số liệu cụ thể.",
     },
     "Phóng viên Thời sự": {
-        "topics": ["Thoi Su", "Phap Luat"],
-        "desc": "Ngắn gọn, khách quan, đúng trọng tâm",
-        "prompt": (
-            "Bạn là một phóng viên hiện trường kỳ cựu. "
-            "Hãy tóm tắt tin tức cực kỳ ngắn gọn, súc tích và khách quan. "
-            "Nhấn mạnh vào: Ai, Cái gì, Ở đâu, Khi nào, Tại sao."
-        ),
+        "topics":       ["Thoi Su", "Phap Luat"],
+        "desc":         "Ngắn gọn, khách quan, đúng trọng tâm 5W1H",
+        "prompt":       "Bạn là phóng viên hiện trường kỳ cựu. Tóm tắt tin tức ngắn gọn, khách quan. Nhấn mạnh: Ai, Cái gì, Ở đâu, Khi nào, Tại sao.",
     },
     "Blogger Thể thao": {
-        "topics": ["The Thao", "Giao Duc"],
-        "desc": "Năng động, hào hứng, gần gũi",
-        "prompt": (
-            "Bạn là một Influencer thể thao năng động. "
-            "Hãy kể lại tin tức bằng giọng văn hóm hỉnh, tập trung vào cảm xúc và trải nghiệm. "
-            "Dùng ngôn ngữ trẻ trung, gần gũi với người đọc."
-        ),
+        "topics":       ["The Thao", "Giao Duc"],
+        "desc":         "Năng động, hào hứng, gần gũi",
+        "prompt":       "Bạn là Influencer thể thao năng động. Kể lại tin tức bằng giọng hóm hỉnh, tập trung vào cảm xúc. Dùng ngôn ngữ trẻ trung, gần gũi.",
     },
     "Độc giả Tổng hợp": {
-        "topics": [],
-        "desc": "Cân bằng, đa chiều, dễ đọc",
-        "prompt": (
-            "Bạn là trợ lý tin tức thân thiện. "
-            "Hãy trình bày thông tin cân bằng, khách quan và dễ hiểu. "
-            "Đưa ra đủ các khía cạnh quan trọng mà không thiên vị."
-        ),
+        "topics":       [],
+        "desc":         "Cân bằng, đa chiều, dễ đọc",
+        "prompt":       "Bạn là trợ lý tin tức thân thiện. Trình bày thông tin cân bằng, khách quan, dễ hiểu. Đưa ra đủ các khía cạnh quan trọng.",
     },
 }
 
-DEFAULT_SYSTEM = "Bạn là trợ lý tin tức. Hãy trả lời câu hỏi của người dùng một cách ngắn gọn và khách quan."
+DEFAULT_PROMPT = "Bạn là trợ lý tin tức. Trả lời ngắn gọn và khách quan."
 
 def assign_persona(selected_topics: list) -> str:
     best, best_score = "Độc giả Tổng hợp", 0
@@ -93,51 +75,153 @@ def assign_persona(selected_topics: list) -> str:
     return best
 
 # ─────────────────────────────────────────────
+# SESSION STATE
+# ─────────────────────────────────────────────
+if "read_article_ids" not in st.session_state:
+    st.session_state.read_article_ids = []      # id bài đã đọc
+if "read_vectors" not in st.session_state:
+    st.session_state.read_vectors = []          # embedding bài đã đọc
+if "user_vector" not in st.session_state:
+    st.session_state.user_vector = None         # vector sở thích hiện tại
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "active_persona" not in st.session_state:
+    st.session_state.active_persona = "Độc giả Tổng hợp"
+
+# ─────────────────────────────────────────────
 # DATABASE
 # ─────────────────────────────────────────────
 @st.cache_resource
-
 def get_conn():
-    return psycopg2.connect(**DB_CONFIG)
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        conn.autocommit = True
+        return conn
+    except Exception as e:
+        st.error(f"❌ Lỗi kết nối Database: {e}")
+        return None
 
-def fetch_articles(topics: list, limit: int = 30):
+def fetch_data(query, params=None):
     get_conn.clear()
     conn = get_conn()
+    if not conn:
+        return []
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                """
-                SELECT id, title, url, topic, published_at, content
-                FROM public.raw_data
-                WHERE topic = ANY(%s)
-                ORDER BY published_at DESC
-                LIMIT %s
-                """,
-                (topics, limit),
-            )
+            cur.execute(query, params)
             return cur.fetchall()
     except Exception as e:
-        conn.rollback()  # ← reset transaction bị kẹt
-        raise e
+        st.error(f"❌ Lỗi truy vấn: {e}")
+        return []
+
+# JOIN raw_data + n8n_vector qua title matching (đã xác nhận hoạt động)
+JOIN_CLAUSE = """
+    FROM raw_data r
+    JOIN n8n_vectors v
+        ON v.text LIKE '%%' || LEFT(r.title, 30) || '%%'
+"""
+
+def fetch_articles_by_topics(topics: list, limit: int = 15):
+    placeholders = ", ".join(["%s"] * len(topics))
+    query = f"""
+        SELECT DISTINCT ON (r.id)
+            r.id, r.title, r.url, r.topic, r.published_at, r.content,
+            v.id as vector_id, v.embedding
+        {JOIN_CLAUSE}
+        WHERE r.topic IN ({placeholders})
+        ORDER BY r.id, r.published_at DESC
+        LIMIT %s
+    """
+    return fetch_data(query, tuple(topics) + (limit,))
+
+def fetch_latest_articles(limit: int = 15):
+    query = f"""
+        SELECT DISTINCT ON (r.id)
+            r.id, r.title, r.url, r.topic, r.published_at, r.content,
+            v.id as vector_id, v.embedding
+        {JOIN_CLAUSE}
+        ORDER BY r.id, r.published_at DESC
+        LIMIT %s
+    """
+    return fetch_data(query, (limit,))
+
+def fetch_similar_articles(user_vec: list, limit: int = 10):
+    """Vector search: tìm bài gần nhất với user vector"""
+    query = f"""
+        SELECT DISTINCT ON (r.id)
+            r.id, r.title, r.url, r.topic, r.published_at, r.content,
+            v.embedding,
+            1 - (v.embedding <=> %s::vector) AS score
+        {JOIN_CLAUSE}
+        ORDER BY r.id, v.embedding <=> %s::vector ASC
+        LIMIT %s
+    """
+    return fetch_data(query, (user_vec, user_vec, limit))
+
+def fetch_rag_context(query_vec: list, top_k: int = 3):
+    """Lấy top_k bài liên quan nhất để đưa vào RAG context"""
+    query = f"""
+        SELECT DISTINCT ON (r.id)
+            r.title, r.topic,
+            LEFT(r.content, 500) as content_snippet,
+            1 - (v.embedding <=> %s::vector) AS score
+        {JOIN_CLAUSE}
+        ORDER BY r.id, v.embedding <=> %s::vector ASC
+        LIMIT %s
+    """
+    return fetch_data(query, (query_vec, query_vec, top_k))
 
 # ─────────────────────────────────────────────
 # OLLAMA
 # ─────────────────────────────────────────────
-def call_ollama(system_prompt: str, user_message: str) -> str:
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": user_message},
-        ],
-        "stream": False,
-    }
+def embed_text(text: str) -> list | None:
+    """Embed text bằng nomic-embed-text qua Ollama"""
     try:
+        r = requests.post(
+            EMBED_URL,
+            json={"model": EMBED_MODEL, "prompt": text},
+            timeout=70,
+        )
+        r.raise_for_status()
+        return r.json()["embedding"]
+    except Exception as e:
+        st.warning(f"⚠️ Lỗi embed: {e}")
+        return None
+
+def ask_ollama(system_prompt: str, user_msg: str) -> str:
+    try:
+        payload = {
+            "model": OLLAMA_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_msg},
+            ],
+            "stream": False,
+        }
         r = requests.post(OLLAMA_URL, json=payload, timeout=120)
         r.raise_for_status()
         return r.json()["message"]["content"]
     except Exception as e:
-        return f"❌ Lỗi kết nối Ollama: {e}"
+        return f"⚠️ Lỗi Ollama: {e}"
+
+def ask_ollama_rag(system_prompt: str, context_articles: list, user_question: str) -> str:
+    """Gọi Ollama với RAG context từ bài báo liên quan"""
+    if not context_articles:
+        return ask_ollama(system_prompt, user_question)
+
+    context_text = "\n\n".join([
+        f"[{i+1}] {a['title']} ({TOPIC_LABELS.get(a['topic'], a['topic'])}):\n{a['content_snippet']}"
+        for i, a in enumerate(context_articles)
+    ])
+
+    rag_system = f"""{system_prompt}
+
+Dưới đây là các bài báo liên quan để tham khảo khi trả lời:
+{context_text}
+
+Hãy trả lời dựa trên các bài báo trên. Nếu câu hỏi không liên quan đến bài báo, hãy trả lời theo kiến thức chung."""
+
+    return ask_ollama(rag_system, user_question)
 
 # ─────────────────────────────────────────────
 # CSS
@@ -145,7 +229,6 @@ def call_ollama(system_prompt: str, user_message: str) -> str:
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap');
-
 html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
 h1, h2, h3 { font-family: 'Playfair Display', serif; }
 
@@ -162,7 +245,6 @@ h1, h2, h3 { font-family: 'Playfair Display', serif; }
     font-size: 1rem;
     color: #1e293b;
     line-height: 1.45;
-    margin: 4px 0 0 0;
 }
 .article-meta { font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; }
 .badge {
@@ -178,27 +260,34 @@ h1, h2, h3 { font-family: 'Playfair Display', serif; }
 .persona-banner {
     background: linear-gradient(135deg, #1e293b, #334155);
     border-radius: 10px;
-    padding: 18px 24px;
+    padding: 16px 22px;
     color: white;
-    margin: 12px 0 20px 0;
+    margin-bottom: 20px;
 }
-.persona-banner h3 { margin: 0 0 4px 0; font-size: 1.3rem; color: white; }
-.persona-banner p  { margin: 0; opacity: .75; font-size: 0.88rem; }
-
-.box {
+.persona-banner h3 { margin: 0 0 4px 0; font-size: 1.2rem; color: white; }
+.persona-banner p  { margin: 0; opacity: .75; font-size: 0.85rem; }
+.compare-box {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    padding: 14px 16px;
-    min-height: 160px;
+    padding: 14px;
+    min-height: 140px;
     white-space: pre-wrap;
 }
-.box-label {
-    font-size: 0.75rem;
+.compare-label {
+    font-size: 0.72rem;
     font-weight: 600;
     letter-spacing: .06em;
     text-transform: uppercase;
     margin-bottom: 8px;
+}
+.rag-source {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -207,26 +296,63 @@ h1, h2, h3 { font-family: 'Playfair Display', serif; }
 # SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## Cá nhân hóa")
+    st.markdown("## 📰 NewsPersona")
     st.markdown("Chọn **3–4 chủ đề** bạn quan tâm:")
 
-    user_interests = st.multiselect(
-        label="Chủ đề",
+    interests = st.multiselect(
+        label="topics",
         options=list(TOPIC_LABELS.keys()),
         format_func=lambda x: TOPIC_LABELS[x],
         max_selections=4,
         label_visibility="collapsed",
     )
 
-    n = len(user_interests)
-    if n < 3:
-        st.info(f"Chọn thêm {3 - n} chủ đề nữa.")
-        active_persona = "Độc giả Tổng hợp"
-    else:
-        active_persona = assign_persona(user_interests)
-        cfg = PERSONA_CONFIG[active_persona]
-        #st.success(f"Persona: **{cfg['icon']} {active_persona}**")
+    if interests:
+        # Gán persona dựa trên topics đã chọn
+        persona_name = assign_persona(interests)
+        st.session_state.active_persona = persona_name
+        cfg = PERSONA_CONFIG[persona_name]
+        st.success(f"Persona: ** {persona_name}**")
         st.caption(cfg["desc"])
+
+        # Tính user_vector = trung bình embedding các bài thuộc topics đã chọn
+        if st.button("🔄 Cập nhật Feed", use_container_width=True):
+            with st.spinner("Đang tính vector sở thích..."):
+                rows = fetch_articles_by_topics(interests, limit=100)
+                if rows:
+                    vecs = []
+                    for row in rows:
+                        emb = row.get("embedding")
+                        if emb is not None:
+                            if isinstance(emb, str):
+                                import ast
+                                emb = ast.literal_eval(emb)
+                            vecs.append(np.array(emb, dtype=np.float32))
+                    if vecs:
+                        st.session_state.user_vector = np.mean(vecs, axis=0).tolist()
+                        st.success(f"Feed đã cập nhật từ {len(vecs)} bài!")
+
+    st.markdown("---")
+
+    # Hiển thị số bài đã đọc
+    n_read = len(st.session_state.read_article_ids)
+    if n_read > 0:
+        st.metric("Bài đã đọc", n_read)
+        if st.button("🔄 Cập nhật Feed từ hành vi", use_container_width=True):
+            if st.session_state.read_vectors:
+                combined = np.mean(st.session_state.read_vectors, axis=0).tolist()
+                # Blend 50/50 giữa topic vector và behavior vector
+                if st.session_state.user_vector:
+                    topic_vec  = np.array(st.session_state.user_vector)
+                    behav_vec  = np.array(combined)
+                    st.session_state.user_vector = ((topic_vec + behav_vec) / 2).tolist()
+                else:
+                    st.session_state.user_vector = combined
+                st.success("Feed đã thích nghi theo hành vi đọc!")
+
+    if st.button("🗑️ Reset", use_container_width=True):
+        st.session_state.clear()
+        st.rerun()
 
     st.markdown("---")
     st.caption(f"Model: `{OLLAMA_MODEL}`")
@@ -234,125 +360,165 @@ with st.sidebar:
 # ─────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────
-persona_cfg = PERSONA_CONFIG[active_persona]
+persona_cfg  = PERSONA_CONFIG[st.session_state.active_persona]
+persona_name = st.session_state.active_persona
 
-st.markdown("# NewsPersona")
+st.markdown("# 📰 NewsPersona")
 st.markdown(
-    f"""
-    <div class="persona-banner">
+    f"""<div class="persona-banner">
+        <h3>{persona_name}</h3>
         <p>{persona_cfg['desc']}</p>
-    </div>
-    """,
+    </div>""",
     unsafe_allow_html=True,
 )
 
-tab_feed, tab_chat = st.tabs(["📋 Feed bài báo", "💬 Hỏi đáp & So sánh"])
+tab_feed, tab_latest, tab_chat = st.tabs([
+    "✨ Feed For You",
+    "🗞️ Tất cả bài báo",
+    "💬 Hỏi đáp (RAG)",
+])
+
+# ─────────────────────────────────────────────
+def render_article(art, key_prefix: str, show_score: bool = False):
+    pub = art.get("published_at")
+    pub_str = pub.strftime("%d/%m/%Y %H:%M") if isinstance(pub, datetime) else str(pub)[:16]
+    score_str = f" | Độ phù hợp: {art['score']:.0%}" if show_score and "score" in art else ""
+
+    st.markdown(
+        f"""<div class="article-card">
+            <div class="article-meta">
+                <span class="badge">{TOPIC_LABELS.get(art['topic'], art['topic'])}</span>
+                {pub_str}{score_str}
+            </div>
+            <div class="article-title">
+                <a href="{art['url']}" target="_blank" style="color:inherit;text-decoration:none;">
+                    {art['title']}
+                </a>
+            </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        already_read = str(art["id"]) in st.session_state.read_article_ids
+        if not already_read:
+            if st.button("✅ Đã đọc", key=f"read_{key_prefix}_{art['id']}"):
+                st.session_state.read_article_ids.append(str(art["id"]))
+                emb = art.get("embedding")
+                if emb is not None:
+                    if isinstance(emb, str):
+                        import ast
+                        emb = ast.literal_eval(emb)
+                    st.session_state.read_vectors.append(np.array(emb, dtype=np.float32))
+                st.toast("Đã ghi nhận!")
+                st.rerun()
+        else:
+            st.caption("✅ Đã đọc")
+
+    with st.expander("🔍 Tóm tắt có / không có Persona Prompt"):
+        if st.button("▶ Tạo tóm tắt", key=f"sum_{key_prefix}_{art['id']}"):
+            snippet  = art.get("content", "")[:2000]
+            user_msg = f"Tóm tắt bài báo sau trong 3–4 câu bằng tiếng Việt:\n\n{snippet}"
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown('<div class="compare-label" style="color:#64748b;">⬜ Không có Persona Prompt</div>', unsafe_allow_html=True)
+                with st.spinner("Đang tạo..."):
+                    r1 = ask_ollama(DEFAULT_PROMPT, user_msg)
+                st.markdown(f'<div class="compare-box">{r1}</div>', unsafe_allow_html=True)
+            with c2:
+                st.markdown(f'<div class="compare-label" style="color:#2563eb;">🎯 {persona_name}</div>', unsafe_allow_html=True)
+                with st.spinner("Đang tạo..."):
+                    r2 = ask_ollama(persona_cfg["prompt"], user_msg)
+                st.markdown(f'<div class="compare-box">{r2}</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
-# TAB 1 — FEED
+# TAB 1 — FEED CÁ NHÂN
 # ══════════════════════════════════════════════
 with tab_feed:
-    if not user_interests:
-        st.info("👈 Chọn chủ đề ở sidebar để xem bài báo.")
+    if st.session_state.user_vector is None:
+        st.info("👈 Chọn chủ đề ở sidebar rồi bấm **Cập nhật Feed** để xem gợi ý cá nhân.")
     else:
-        try:
-            articles = fetch_articles(user_interests)
-        except Exception as e:
-            st.error(f"Lỗi kết nối database: {e}")
-            articles = []
-
+        st.markdown(f"**Gợi ý dựa trên sở thích của bạn** {'(đã cập nhật theo hành vi)' if st.session_state.read_vectors else ''}")
+        articles = fetch_similar_articles(st.session_state.user_vector, limit=10)
         if not articles:
-            st.warning("Chưa có bài báo nào cho các chủ đề đã chọn.")
+            st.warning("Chưa tìm được bài phù hợp.")
         else:
-            st.markdown(f"**{len(articles)} bài báo mới nhất**")
-
             for art in articles:
-                pub = art["published_at"]
-                pub_str = pub.strftime("%d/%m/%Y %H:%M") if isinstance(pub, datetime) else str(pub)[:16]
-
-                st.markdown(
-                    f"""
-                    <div class="article-card">
-                        <div class="article-meta">
-                            <span class="badge">{TOPIC_LABELS.get(art['topic'], art['topic'])}</span>
-                            {pub_str}
-                        </div>
-                        <div class="article-title">
-                            <a href="{art['url']}" target="_blank" style="color:inherit;text-decoration:none;">
-                                {art['title']}
-                            </a>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                with st.expander("🔍 Tóm tắt có / không có Persona Prompt"):
-                    if st.button("▶ Tạo tóm tắt", key=f"btn_{art['id']}"):
-                        snippet  = art["content"][:2500]
-                        user_msg = f"Tóm tắt bài báo sau trong 3–4 câu bằng tiếng Việt:\n\n{snippet}"
-
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown('<div class="box-label" style="color:#64748b;">⬜ Không có Persona Prompt</div>', unsafe_allow_html=True)
-                            with st.spinner("Đang tạo..."):
-                                res_no = call_ollama(DEFAULT_SYSTEM, user_msg)
-                            st.markdown(f'<div class="box">{res_no}</div>', unsafe_allow_html=True)
-                        with col2:
-                            st.markdown(f'<div class="box-label" style="color:#2563eb;">🎯 Persona: {active_persona}</div>', unsafe_allow_html=True)
-                            with st.spinner("Đang tạo..."):
-                                res_yes = call_ollama(persona_cfg["prompt"], user_msg)
-                            st.markdown(f'<div class="box">{res_yes}</div>', unsafe_allow_html=True)
+                render_article(art, key_prefix="feed", show_score=True)
 
 # ══════════════════════════════════════════════
-# TAB 2 — CHAT & SO SÁNH
+# TAB 2 — TẤT CẢ BÀI BÁO
+# ══════════════════════════════════════════════
+with tab_latest:
+    st.markdown("**Tất cả bài báo mới nhất**")
+    latest = fetch_latest_articles(limit=20)
+    if not latest:
+        st.warning("Chưa có bài báo nào.")
+    else:
+        for art in latest:
+            render_article(art, key_prefix="latest")
+
+# ══════════════════════════════════════════════
+# TAB 3 — CHAT RAG
 # ══════════════════════════════════════════════
 with tab_chat:
-    st.markdown("Đặt câu hỏi về tin tức — xem AI trả lời **có** và **không có** Persona Prompt.")
+    st.markdown(f"Hỏi về tin tức — AI tìm bài liên quan rồi trả lời theo **Persona {persona_name}**")
+    st.markdown("---")
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-
-    # Hiển thị lịch sử chat
+    # Hiển thị lịch sử
     for msg in st.session_state.chat_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
                 st.markdown(msg["content"])
         else:
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown('<div class="box-label" style="color:#64748b;">⬜ Không có Prompt</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="box">{msg["no_persona"]}</div>', unsafe_allow_html=True)
-            with col2:
-                st.markdown(f'<div class="box-label" style="color:#2563eb;">🎯 {active_persona}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="box">{msg["with_persona"]}</div>', unsafe_allow_html=True)
-            st.markdown("")
+            with st.chat_message("assistant"):
+                st.markdown(msg["answer"])
+                if msg.get("sources"):
+                    with st.expander("📚 Nguồn bài báo được dùng"):
+                        for src in msg["sources"]:
+                            st.markdown(
+                                f'<div class="rag-source">📄 <b>{src["title"]}</b> '
+                                f'<span style="color:#94a3b8">— {TOPIC_LABELS.get(src["topic"], src["topic"])}</span></div>',
+                                unsafe_allow_html=True,
+                            )
 
-    # Chat input
-    user_input = st.chat_input("Nhập câu hỏi của bạn...")
+    # Input
+    user_input = st.chat_input("Hỏi về tin tức...")
     if user_input:
-        # Hiện tin nhắn user
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # Gọi Ollama 2 lần song song
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown('<div class="box-label" style="color:#64748b;">⬜ Không có Persona Prompt</div>', unsafe_allow_html=True)
-            with st.spinner("Đang trả lời..."):
-                res_no = call_ollama(DEFAULT_SYSTEM, user_input)
-            st.markdown(f'<div class="box">{res_no}</div>', unsafe_allow_html=True)
-        with col2:
-            st.markdown(f'<div class="box-label" style="color:#2563eb;">🎯 Persona: {active_persona}</div>', unsafe_allow_html=True)
-            with st.spinner("Đang trả lời..."):
-                res_yes = call_ollama(persona_cfg["prompt"], user_input)
-            st.markdown(f'<div class="box">{res_yes}</div>', unsafe_allow_html=True)
+        with st.chat_message("assistant"):
+            with st.spinner("Đang tìm bài liên quan..."):
+                # Embed câu hỏi
+                query_vec = embed_text(user_input)
 
-        # Lưu vào history
+            sources = []
+            if query_vec:
+                with st.spinner("Đang tìm kiếm..."):
+                    rag_articles = fetch_rag_context(query_vec, top_k=3)
+                    sources = [dict(a) for a in rag_articles] if rag_articles else []
+
+            with st.spinner("Đang trả lời..."):
+                answer = ask_ollama_rag(persona_cfg["prompt"], sources, user_input)
+
+            st.markdown(answer)
+
+            if sources:
+                with st.expander("📚 Nguồn bài báo được dùng"):
+                    for src in sources:
+                        st.markdown(
+                            f'<div class="rag-source">📄 <b>{src["title"]}</b> '
+                            f'<span style="color:#94a3b8">— {TOPIC_LABELS.get(src["topic"], src["topic"])}</span></div>',
+                            unsafe_allow_html=True,
+                        )
+
         st.session_state.chat_history.append({"role": "user",      "content": user_input})
-        st.session_state.chat_history.append({"role": "assistant", "no_persona": res_no, "with_persona": res_yes})
+        st.session_state.chat_history.append({"role": "assistant", "answer": answer, "sources": sources})
 
     if st.session_state.chat_history:
-        if st.button("🗑️ Xóa lịch sử"):
+        if st.button("🗑️ Xóa lịch sử chat"):
             st.session_state.chat_history = []
             st.rerun()

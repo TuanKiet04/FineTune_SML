@@ -70,3 +70,4 @@ urllib3==2.2.3
 watchdog==4.0.2
 websockets==13.1
 yarl==1.13.1
+matplotlib
