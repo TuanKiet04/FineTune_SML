@@ -194,7 +194,6 @@ services:
     networks:
       - kietcorn-network
 
-
 volumes:
   my-n8n-data-example:
     external: true
@@ -207,6 +206,7 @@ volumes:
   ngrok_data:
   rabbitmq_data:
   rabbitmq_logs:
+  openclaw_config:
 
 
 networks:
